@@ -10,10 +10,13 @@ export class FriendRequestRepository {
     this.repo = AppDataSource.getRepository(FriendRequest);
   }
 
-  async createRequest(fromUserId: string, toUserId: string): Promise<FriendRequest> {
+  async createRequest(
+    fromUserId: string,
+    toUserId: string,
+  ): Promise<FriendRequest> {
     const request = this.repo.create({
       fromUser: { id: fromUserId },
-      toUser: { id: toUserId },    
+      toUser: { id: toUserId },
       status: 'pending',
     });
     return this.repo.save(request);
@@ -60,8 +63,12 @@ export class FriendRequestRepository {
   async findById(id: string): Promise<FriendRequest | null> {
     return this.repo.findOne({
       where: { id },
-      relations: ['fromUser', 'toUser'], 
+      relations: ['fromUser', 'toUser'],
     });
+  }
+
+  async delete(requestId: string): Promise<void> {
+    await this.repo.delete(requestId);
   }
 
   async findOneByConditions(conditions: any): Promise<FriendRequest | null> {
@@ -82,7 +89,9 @@ export class FriendRequestRepository {
       .leftJoinAndSelect('fr.fromUser', 'fromUser')
       .leftJoinAndSelect('fr.toUser', 'toUser')
       .where('fr.status = :status', { status: 'accepted' })
-      .andWhere('(fr.fromUser.id = :userId OR fr.toUser.id = :userId)', { userId })
+      .andWhere('(fr.fromUser.id = :userId OR fr.toUser.id = :userId)', {
+        userId,
+      })
       .getMany();
 
     const friends: User[] = [];
@@ -90,8 +99,7 @@ export class FriendRequestRepository {
     acceptedRequests.forEach((req) => {
       if (req.fromUser?.id === userId && req.toUser) {
         friends.push(req.toUser);
-      }
-      else if (req.toUser?.id === userId && req.fromUser) {
+      } else if (req.toUser?.id === userId && req.fromUser) {
         friends.push(req.fromUser);
       }
     });
@@ -99,6 +107,30 @@ export class FriendRequestRepository {
     const unique = friends.filter((u): u is User => !!u && !!u.id);
     const map = new Map(unique.map((u) => [u.id, u]));
     return Array.from(map.values());
+  }
+
+  async isFriend(userId1: string, userId2: string): Promise<boolean> {
+    return this.repo
+      .createQueryBuilder('fr')
+      .where(
+        '(fr.fromUser.id = :userId1 AND fr.toUser.id = :userId2) OR (fr.fromUser.id = :userId2 AND fr.toUser.id = :userId1)',
+        { userId1, userId2 },
+      )
+      .andWhere('fr.status = :status', { status: 'accepted' })
+      .getExists();
+  }
+
+  async removeFriendship(userId1: string, userId2: string): Promise<void> {
+    await this.repo
+      .createQueryBuilder()
+      .delete()
+      .from(FriendRequest)
+      .where(
+        '(fromUser.id = :userId1 AND toUser.id = :userId2) OR (fromUser.id = :userId2 AND toUser.id = :userId1)',
+        { userId1, userId2 },
+      )
+      .andWhere('status = :status', { status: 'accepted' })
+      .execute();
   }
 }
 

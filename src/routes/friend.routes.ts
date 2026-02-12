@@ -7,6 +7,9 @@ import {
   acceptRequest,
   rejectRequest,
   getFriends,
+  searchByUsername,
+  cancelOutgoingRequest,
+  removeFriend,
 } from '../controllers/friend.controller';
 
 const router = Router();
@@ -18,6 +21,9 @@ router.get('/incoming', getIncomingRequests);
 router.get('/outgoing', getOutgoingRequests);
 router.post('/accept/:requestId', acceptRequest);
 router.post('/reject/:requestId', rejectRequest);
+router.delete('/delete/:friendId', removeFriend);
+router.delete('/request/:requestId', cancelOutgoingRequest);
+router.get('/search', searchByUsername);
 router.get('/', getFriends);
 
 export default router;
