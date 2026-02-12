@@ -1,6 +1,7 @@
 import { Repository } from 'typeorm';
 import { Message } from '../entities/message.entity';
 import { AppDataSource } from '../config/data-source';
+import { chatRepository } from './chat.repository';
 
 type Direction = 'before' | 'after' | 'initial';
 
@@ -24,14 +25,15 @@ export class MessageRepository {
     type: 'text' | 'image' | 'file' | 'system' | 'ai_generated' = 'text',
   ): Promise<Message> {
     const message = this.repo.create({
-      chat: { id: chatId }, 
+      chat: { id: chatId },
       sender: { id: senderId },
       content,
       type,
       isRead: false,
     });
 
-    return this.repo.save(message);
+    const saved = await this.repo.save(message);
+    return this.findWithRelations({ id: saved.id }) as Promise<Message>;
   }
 
   async getMessagesForChat(
@@ -47,6 +49,7 @@ export class MessageRepository {
     const qb = this.repo
       .createQueryBuilder('message')
       .leftJoinAndSelect('message.sender', 'sender')
+      .leftJoinAndSelect('message.chat', 'chat') // ← добавляем chat
       .where('message.chat.id = :chatId', { chatId });
 
     if (direction === 'before' && cursorCreatedAt) {
@@ -127,11 +130,12 @@ export class MessageRepository {
   }
 
   async findLastMessageByChatId(chatId: string): Promise<Message | null> {
-    return this.repo.findOne({
+    const message = await this.repo.findOne({
       where: { chat: { id: chatId } },
       order: { createdAt: 'DESC' },
-      relations: ['sender'],
+      relations: ['sender', 'chat'], // ← добавляем chat
     });
+    return message;
   }
 
   async markMessagesAsRead(chatId: string, userId: string): Promise<void> {
@@ -145,7 +149,7 @@ export class MessageRepository {
       .execute();
   }
 
-  async findByIdWithChatAndSender(id: string): Promise<Message | null> {
+  async findByIdWithRelations(id: string): Promise<Message | null> {
     return this.repo.findOne({
       where: { id },
       relations: ['sender', 'chat'],
@@ -199,7 +203,7 @@ export class MessageRepository {
     return this.repo
       .createQueryBuilder('message')
       .leftJoinAndSelect('message.sender', 'sender')
-      .leftJoinAndSelect('message.chat', 'chat') 
+      .leftJoinAndSelect('message.chat', 'chat')
       .innerJoin(
         'chat_participants',
         'cp',
@@ -227,6 +231,7 @@ export class MessageRepository {
     const messages = await this.repo
       .createQueryBuilder('message')
       .leftJoinAndSelect('message.sender', 'sender')
+      .leftJoinAndSelect('message.chat', 'chat') // ← добавляем
       .where('message.chat_id = :chatId', { chatId })
       .andWhere('message.createdAt < :createdAt', { createdAt })
       .andWhere('message.id != :anchorId', { anchorId })
@@ -252,15 +257,16 @@ export class MessageRepository {
     const messages = await this.repo
       .createQueryBuilder('message')
       .leftJoinAndSelect('message.sender', 'sender')
+      .leftJoinAndSelect('message.chat', 'chat') // ← добавляем
       .where('message.chat_id = :chatId', { chatId })
       .andWhere('message.createdAt > :createdAt', { createdAt })
-      .andWhere('message.id != :anchorId', { anchorId }) 
+      .andWhere('message.id != :anchorId', { anchorId })
       .orderBy('message.createdAt', 'ASC')
-      .limit(limit + 1) 
+      .limit(limit + 1)
       .getMany();
 
-    const hasMore = messages.length > limit; 
-    const result = hasMore ? messages.slice(0, limit) : messages; 
+    const hasMore = messages.length > limit;
+    const result = hasMore ? messages.slice(0, limit) : messages;
 
     return {
       messages: result,
@@ -313,6 +319,80 @@ export class MessageRepository {
       .where('message.chat.id = :chatId', { chatId })
       .andWhere('message.createdAt > :createdAt', { createdAt })
       .getExists();
+  }
+
+  async pinMessage(
+    messageId: string,
+    chatId: string,
+    userId: string,
+  ): Promise<Message> {
+    const message = await this.repo.findOne({
+      where: { id: messageId, chat: { id: chatId } },
+      relations: ['chat'], // пока без sender
+    });
+
+    if (!message) {
+      throw new Error('Сообщение не найдено');
+    }
+
+    const isParticipant = await chatRepository.isUserInChat(chatId, userId);
+    if (!isParticipant) {
+      throw new Error('Нет доступа к чату');
+    }
+
+    message.isPinned = true;
+    await this.repo.save(message);
+
+    // Перезагружаем с sender и chat
+    return this.repo.findOneOrFail({
+      where: { id: messageId },
+      relations: ['chat', 'sender'],
+    });
+  }
+
+  async unpinMessage(
+    messageId: string,
+    chatId: string,
+    userId: string,
+  ): Promise<Message> {
+    const message = await this.repo.findOne({
+      where: { id: messageId, chat: { id: chatId } },
+      relations: ['chat'],
+    });
+
+    if (!message) {
+      throw new Error('Сообщение не найдено');
+    }
+
+    const isParticipant = await chatRepository.isUserInChat(chatId, userId);
+    if (!isParticipant) {
+      throw new Error('Нет доступа к чату');
+    }
+
+    message.isPinned = false;
+    await this.repo.save(message);
+
+    // Перезагружаем с sender и chat
+    return this.repo.findOneOrFail({
+      where: { id: messageId },
+      relations: ['chat', 'sender'],
+    });
+  }
+
+  async getPinnedMessages(chatId: string): Promise<Message[]> {
+    return this.repo
+      .createQueryBuilder('message')
+      .leftJoinAndSelect('message.sender', 'sender')
+      .where('message.chat.id = :chatId', { chatId })
+      .andWhere('message.isPinned = :isPinned', { isPinned: true })
+      .orderBy('message.createdAt', 'DESC') // или добавь поле pinnedAt
+      .getMany();
+  }
+  private async findWithRelations(where: any): Promise<Message | null> {
+    return this.repo.findOne({
+      where,
+      relations: ['chat', 'sender'], // всегда загружаем chat и sender
+    });
   }
 }
 

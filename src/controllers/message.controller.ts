@@ -110,7 +110,7 @@ export const searchMessagesGlobal = async (
 
     return res.json({
       success: true,
-      data: messages, 
+      data: messages,
     });
   } catch (err) {
     console.error('Глобальный поиск ошибка:', err);
@@ -162,6 +162,78 @@ export const searchMessagesInChat = async (
   }
 };
 
+export const pinMessage = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { messageId } = req.params;
+    const { chatId } = req.body;
+
+    const message = await messageRepository.pinMessage(
+      messageId,
+      chatId,
+      req.user!.userId,
+    );
+
+    return res.json({
+      success: true,
+      data: message, // ← здесь уже будет sender и chat
+    });
+  } catch (err) {
+    console.error(err);
+  }
+};
+
+export const unpinMessage = async (
+  req: AuthenticatedRequest,
+  res: Response,
+) => {
+  try {
+    const { messageId } = req.params;
+    const { chatId } = req.body;
+
+    const message = await messageRepository.unpinMessage(
+      messageId,
+      chatId,
+      req.user!.userId,
+    );
+
+    return res.json({
+      success: true,
+      data: message, // ← здесь тоже будет sender и chat
+    });
+  } catch (err) {
+    console.error(err);
+  }
+};
+
+export const getPinnedMessages = async (
+  req: AuthenticatedRequest,
+  res: Response,
+) => {
+  try {
+    const { chatId } = req.params;
+
+    const isParticipant = await chatRepository.isUserInChat(
+      chatId,
+      req.user!.userId,
+    );
+    if (!isParticipant) {
+      return res
+        .status(403)
+        .json({ success: false, message: 'Нет доступа к чату' });
+    }
+
+    const pinned = await messageRepository.getPinnedMessages(chatId);
+
+    return res.json({
+      success: true,
+      data: pinned,
+    });
+  } catch (err) {
+    console.error('Ошибка получения закреплённых:', err);
+    return res.status(500).json({ success: false, message: 'Ошибка сервера' });
+  }
+};
+
 export const getMessageContext = async (
   req: AuthenticatedRequest,
   res: Response,
@@ -170,8 +242,7 @@ export const getMessageContext = async (
     const { messageId } = req.params;
     const limit = Number(req.query.limit) || 15;
 
-    const message =
-      await messageRepository.findByIdWithChatAndSender(messageId);
+    const message = await messageRepository.findByIdWithRelations(messageId);
 
     if (!message) {
       return res

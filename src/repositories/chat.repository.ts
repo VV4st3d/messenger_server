@@ -63,12 +63,9 @@ export class ChatRepository {
         'myParticipation',
         'myParticipation.id = :userId',
         { userId },
-      ) 
-      .leftJoinAndSelect('chat.participants', 'participant') 
-      .leftJoinAndSelect('chat.messages', 'message') 
-      .leftJoinAndSelect('message.sender', 'sender') 
+      )
+      .leftJoinAndSelect('chat.participants', 'participant')
       .where('chat.id = :chatId', { chatId })
-      .orderBy('message.createdAt', 'ASC')
       .getOne();
   }
 

@@ -131,7 +131,7 @@ io.on('connection', async (socket: Socket) => {
         type,
       );
 
-      const savedMessage = await messageRepository.findByIdWithChatAndSender(
+      const savedMessage = await messageRepository.findByIdWithRelations(
         message.id,
       );
 

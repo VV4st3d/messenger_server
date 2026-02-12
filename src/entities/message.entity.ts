@@ -39,7 +39,10 @@ export class Message {
 
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt!: Date;
-  
-  @Column({ type: 'tsvector', select: false }) 
+
+  @Column({ type: 'tsvector', select: false })
   searchVector!: any;
+
+  @Column({ default: false })
+  isPinned!: boolean;
 }
