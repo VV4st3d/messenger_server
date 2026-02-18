@@ -45,4 +45,13 @@ export class Message {
 
   @Column({ default: false })
   isPinned!: boolean;
+
+  @Column({ nullable: true })
+  filePath?: string;
+
+  @Column({ nullable: true })
+  fileType?: string;
+
+  @Column({ nullable: true })
+  fileSize?: number;
 }

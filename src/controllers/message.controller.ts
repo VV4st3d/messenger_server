@@ -2,6 +2,11 @@ import { Request, Response } from 'express';
 import { messageRepository } from '../repositories/message.repository';
 import { AuthenticatedRequest } from '../middlewares/auth.middleware';
 import { chatRepository } from '../repositories/chat.repository';
+import path from 'path';
+import fs from 'fs/promises';
+import { v4 as uuid } from 'uuid';
+import multer from 'multer';
+import { io } from '../app';
 
 export const sendMessage = async (req: AuthenticatedRequest, res: Response) => {
   try {
@@ -33,6 +38,94 @@ export const sendMessage = async (req: AuthenticatedRequest, res: Response) => {
   }
 };
 
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, 'uploads/temp/'); 
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    cb(null, `${uuid()}${ext}`);
+  },
+});
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 50 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowed = [
+      'image/jpeg',
+      'image/png',
+      'video/mp4',
+      'audio/mpeg',
+      'application/pdf',
+    ];
+    if (allowed.includes(file.mimetype)) cb(null, true);
+    else cb(new Error('Недопустимый тип файла'));
+  },
+});
+
+export const uploadMedia = [
+  upload.single('file'),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const userId = req.user!.userId;
+      const { chatId, content = '' } = req.body;
+      const file = req.file;
+
+      if (!chatId || !file) {
+        if (file) await fs.unlink(file.path);
+        return res
+          .status(400)
+          .json({ success: false, message: 'chatId и file обязательны' });
+      }
+
+      const isParticipant = await chatRepository.isUserInChat(chatId, userId);
+      if (!isParticipant) {
+        await fs.unlink(file.path);
+        return res
+          .status(403)
+          .json({ success: false, message: 'Нет доступа к чату' });
+      }
+
+      const chatDir = path.join(__dirname, '../../uploads/chats', chatId);
+      await fs.mkdir(chatDir, { recursive: true });
+
+      const newFileName = `${uuid()}${path.extname(file.originalname)}`;
+      const finalPath = path.join(chatDir, newFileName);
+
+      await fs.rename(file.path, finalPath);
+
+      const relativePath = `/chats/${chatId}/${newFileName}`;
+
+      const message = await messageRepository.createMessage(
+        chatId,
+        userId,
+        content,
+        file.mimetype.startsWith('image/') ? 'image' : 'file',
+      );
+
+      message.filePath = relativePath;
+      message.fileType = file.mimetype;
+      message.fileSize = file.size;
+
+      await messageRepository.save(message);
+
+      const fullMessage = await messageRepository.findByIdWithRelations(
+        message.id,
+      );
+
+      io.to(chatId).emit('newMessage', fullMessage);
+
+      return res.json({ success: true, data: fullMessage });
+    } catch (err) {
+      if (req.file) await fs.unlink(req.file.path).catch(() => {});
+      console.error(err);
+      return res
+        .status(500)
+        .json({ success: false, message: 'Ошибка загрузки' });
+    }
+  },
+];
 export const getMessages = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { chatId } = req.params;
@@ -175,7 +268,7 @@ export const pinMessage = async (req: AuthenticatedRequest, res: Response) => {
 
     return res.json({
       success: true,
-      data: message, // ← здесь уже будет sender и chat
+      data: message,
     });
   } catch (err) {
     console.error(err);
@@ -198,7 +291,7 @@ export const unpinMessage = async (
 
     return res.json({
       success: true,
-      data: message, // ← здесь тоже будет sender и chat
+      data: message,
     });
   } catch (err) {
     console.error(err);
@@ -293,5 +386,21 @@ export const getMessageContext = async (
     return res
       .status(500)
       .json({ success: false, message: 'Ошибка получения контекста' });
+  }
+};
+
+export const deleteMessage = async (
+  req: AuthenticatedRequest,
+  res: Response,
+) => {
+  try {
+    const { messageId } = req.params;
+    const { chatId } = req.body;
+
+    await messageRepository.deleteMessage(messageId);
+
+    return res.json({ success: true, message: 'Сообщение удалено' });
+  } catch (err) {
+    console.error(err);
   }
 };

@@ -2,6 +2,8 @@ import { Repository } from 'typeorm';
 import { Message } from '../entities/message.entity';
 import { AppDataSource } from '../config/data-source';
 import { chatRepository } from './chat.repository';
+import path from 'path';
+import fs from 'fs/promises';
 
 type Direction = 'before' | 'after' | 'initial';
 
@@ -49,7 +51,7 @@ export class MessageRepository {
     const qb = this.repo
       .createQueryBuilder('message')
       .leftJoinAndSelect('message.sender', 'sender')
-      .leftJoinAndSelect('message.chat', 'chat') // ← добавляем chat
+      .leftJoinAndSelect('message.chat', 'chat')
       .where('message.chat.id = :chatId', { chatId });
 
     if (direction === 'before' && cursorCreatedAt) {
@@ -133,7 +135,7 @@ export class MessageRepository {
     const message = await this.repo.findOne({
       where: { chat: { id: chatId } },
       order: { createdAt: 'DESC' },
-      relations: ['sender', 'chat'], // ← добавляем chat
+      relations: ['sender', 'chat'],
     });
     return message;
   }
@@ -231,7 +233,7 @@ export class MessageRepository {
     const messages = await this.repo
       .createQueryBuilder('message')
       .leftJoinAndSelect('message.sender', 'sender')
-      .leftJoinAndSelect('message.chat', 'chat') // ← добавляем
+      .leftJoinAndSelect('message.chat', 'chat')
       .where('message.chat_id = :chatId', { chatId })
       .andWhere('message.createdAt < :createdAt', { createdAt })
       .andWhere('message.id != :anchorId', { anchorId })
@@ -257,7 +259,7 @@ export class MessageRepository {
     const messages = await this.repo
       .createQueryBuilder('message')
       .leftJoinAndSelect('message.sender', 'sender')
-      .leftJoinAndSelect('message.chat', 'chat') // ← добавляем
+      .leftJoinAndSelect('message.chat', 'chat')
       .where('message.chat_id = :chatId', { chatId })
       .andWhere('message.createdAt > :createdAt', { createdAt })
       .andWhere('message.id != :anchorId', { anchorId })
@@ -328,7 +330,7 @@ export class MessageRepository {
   ): Promise<Message> {
     const message = await this.repo.findOne({
       where: { id: messageId, chat: { id: chatId } },
-      relations: ['chat'], // пока без sender
+      relations: ['chat'],
     });
 
     if (!message) {
@@ -343,7 +345,6 @@ export class MessageRepository {
     message.isPinned = true;
     await this.repo.save(message);
 
-    // Перезагружаем с sender и chat
     return this.repo.findOneOrFail({
       where: { id: messageId },
       relations: ['chat', 'sender'],
@@ -372,7 +373,6 @@ export class MessageRepository {
     message.isPinned = false;
     await this.repo.save(message);
 
-    // Перезагружаем с sender и chat
     return this.repo.findOneOrFail({
       where: { id: messageId },
       relations: ['chat', 'sender'],
@@ -385,14 +385,47 @@ export class MessageRepository {
       .leftJoinAndSelect('message.sender', 'sender')
       .where('message.chat.id = :chatId', { chatId })
       .andWhere('message.isPinned = :isPinned', { isPinned: true })
-      .orderBy('message.createdAt', 'DESC') // или добавь поле pinnedAt
+      .orderBy('message.createdAt', 'DESC')
       .getMany();
   }
   private async findWithRelations(where: any): Promise<Message | null> {
     return this.repo.findOne({
       where,
-      relations: ['chat', 'sender'], // всегда загружаем chat и sender
+      relations: ['chat', 'sender'],
     });
+  }
+
+  async createMediaMessage(
+    chatId: string,
+    senderId: string,
+    filePath: string,
+    fileType: string,
+    fileSize: number,
+    content?: string,
+  ): Promise<Message> {
+    const message = this.repo.create({
+      chat: { id: chatId },
+      sender: { id: senderId },
+      content: content || '',
+      type: fileType.startsWith('image/') ? 'image' : 'file',
+      filePath,
+      fileType,
+      fileSize,
+      isRead: false,
+    });
+
+    return this.repo.save(message);
+  }
+
+  async deleteMessage(messageId: string): Promise<void> {
+    const message = await this.repo.findOne({ where: { id: messageId } });
+    if (message?.filePath) {
+      await fs.unlink(path.join(__dirname, '../../', message.filePath));
+    }
+    await this.repo.delete(messageId);
+  }
+  async save(message: Message): Promise<Message> {
+    return this.repo.save(message);
   }
 }
 
