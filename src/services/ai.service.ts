@@ -3,7 +3,7 @@ import axios from 'axios';
 export class AiService {
   private apiUrl = 'https://openrouter.ai/api/v1/chat/completions';
   private apiKey = process.env.OPENROUTER_API_KEY;
-  private model = process.env.OPENROUTER_MODEL || 'openrouter/aurora-alpha';
+  private model = process.env.OPENROUTER_MODEL
 
   async generateResponse(
     userPrompt: string,

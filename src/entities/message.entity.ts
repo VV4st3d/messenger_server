@@ -29,7 +29,7 @@ export class Message {
   content!: string;
 
   @Column({ default: 'text' })
-  type!: 'text' | 'image' | 'file' | 'system' | 'ai_generated';
+  type!: 'text' | 'image' | 'file' | 'system' | 'ai_generated' | 'sticker';
 
   @Column({ default: false })
   isRead!: boolean;

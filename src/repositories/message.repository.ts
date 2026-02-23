@@ -24,7 +24,7 @@ export class MessageRepository {
     chatId: string,
     senderId: string,
     content: string,
-    type: 'text' | 'image' | 'file' | 'system' | 'ai_generated' = 'text',
+    type: 'text' | 'image' | 'file' | 'system' | 'ai_generated' | 'sticker' = 'text',
   ): Promise<Message> {
     const message = this.repo.create({
       chat: { id: chatId },

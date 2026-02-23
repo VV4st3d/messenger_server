@@ -149,7 +149,10 @@ io.on('connection', async (socket: Socket) => {
             type: 'message',
             chatId,
             senderId: userId,
-            content: content.substring(0, 50) + '...',
+            content:
+              type === 'sticker'
+                ? '[Стикер]'
+                : content.substring(0, 50) + '...',
           });
         }
       });
