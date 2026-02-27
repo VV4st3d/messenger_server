@@ -46,6 +46,28 @@ export class UserRepository {
     });
   }
 
+  async updateBio(userId: string, bio: string): Promise<void> {
+    await this.repo.update(userId, { bio });
+  }
+
+  async getPublicProfile(userId: string): Promise<any> {
+    return this.repo
+      .createQueryBuilder('user')
+      .where('user.id = :userId', { userId })
+      .select([
+        'user.id',
+        'user.username',
+        'user.displayName',
+        'user.avatarUrl',
+        'user.status',
+        'user.isOnline',
+        'user.lastActive',
+        'user.createdAt',
+        'user.bio',
+      ])
+      .getRawOne();
+  }
+
   async searchByUsername(
     currentUserId: string,
     usernameQuery: string,
@@ -57,38 +79,36 @@ export class UserRepository {
 
     const search = usernameQuery.trim().toLowerCase();
 
-    return (
-      this.repo
-        .createQueryBuilder('user')
-        .where('user.id != :currentUserId', { currentUserId })
-        .andWhere('LOWER(user.username) LIKE :search', {
-          search: `%${search}%`,
-        })
-        .leftJoin(
-          'friend_requests',
-          'fr_sent',
-          "fr_sent.from_user_id = :currentUserId AND fr_sent.to_user_id = user.id AND fr_sent.status = 'accepted'",
-          { currentUserId },
-        )
-        .leftJoin(
-          'friend_requests',
-          'fr_received',
-          "fr_received.to_user_id = :currentUserId AND fr_received.from_user_id = user.id AND fr_received.status = 'accepted'",
-          { currentUserId },
-        )
-        .select([
-          'user.id AS id',
-          'user.username AS username',
-          'user.displayName AS displayName',
-          'user.avatarUrl AS avatarUrl',
-          'user.status AS status',
-          'user.isOnline AS isOnline',
-          'CASE WHEN fr_sent.id IS NOT NULL OR fr_received.id IS NOT NULL THEN true ELSE false END AS isFriend',
-        ])
-        .limit(limit)
-        .orderBy('user.username', 'ASC')
-        .getRawMany()
-    );
+    return this.repo
+      .createQueryBuilder('user')
+      .where('user.id != :currentUserId', { currentUserId })
+      .andWhere('LOWER(user.username) LIKE :search', {
+        search: `%${search}%`,
+      })
+      .leftJoin(
+        'friend_requests',
+        'fr_sent',
+        "fr_sent.from_user_id = :currentUserId AND fr_sent.to_user_id = user.id AND fr_sent.status = 'accepted'",
+        { currentUserId },
+      )
+      .leftJoin(
+        'friend_requests',
+        'fr_received',
+        "fr_received.to_user_id = :currentUserId AND fr_received.from_user_id = user.id AND fr_received.status = 'accepted'",
+        { currentUserId },
+      )
+      .select([
+        'user.id AS id',
+        'user.username AS username',
+        'user.displayName AS displayName',
+        'user.avatarUrl AS avatarUrl',
+        'user.status AS status',
+        'user.isOnline AS isOnline',
+        'CASE WHEN fr_sent.id IS NOT NULL OR fr_received.id IS NOT NULL THEN true ELSE false END AS isFriend',
+      ])
+      .limit(limit)
+      .orderBy('user.username', 'ASC')
+      .getRawMany();
   }
 }
 
