@@ -95,19 +95,17 @@ export const getUserProfile = async (
     const currentUserId = req.user!.userId;
 
     if (!id) {
-      return res.status(400).json({
-        success: false,
-        message: 'id пользователя обязателен',
-      });
+      return res
+        .status(400)
+        .json({ success: false, message: 'id пользователя обязателен' });
     }
 
-    const profile = await userRepository.getPublicProfile(id);
+    const profile = await userRepository.getPublicProfile(id, currentUserId);
 
     if (!profile) {
-      return res.status(404).json({
-        success: false,
-        message: 'Пользователь не найден',
-      });
+      return res
+        .status(404)
+        .json({ success: false, message: 'Пользователь не найден' });
     }
 
     return res.json({
@@ -116,20 +114,19 @@ export const getUserProfile = async (
         id: profile.user_id,
         username: profile.user_username,
         displayName: profile.user_displayName,
-        avatarUrl: profile.user_avatarurl,
+        avatarUrl: profile.user_avatarUrl,
         status: profile.user_status,
         isOnline: profile.user_isOnline,
         lastActive: profile.user_lastActive,
         createdAt: profile.user_createdAt,
         bio: profile.user_bio || null,
+        friendRequestStatus: profile.friendRequestStatus || 'none',
+        friendRequestId: profile.friendRequestId || null, 
         isOwnProfile: id === currentUserId,
       },
     });
   } catch (err) {
     console.error('Ошибка получения профиля:', err);
-    return res.status(500).json({
-      success: false,
-      message: 'Ошибка сервера',
-    });
+    return res.status(500).json({ success: false, message: 'Ошибка сервера' });
   }
 };

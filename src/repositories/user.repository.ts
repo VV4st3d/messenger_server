@@ -50,8 +50,8 @@ export class UserRepository {
     await this.repo.update(userId, { bio });
   }
 
-  async getPublicProfile(userId: string): Promise<any> {
-    return this.repo
+  async getPublicProfile(userId: string, currentUserId?: string): Promise<any> {
+    const qb = this.repo
       .createQueryBuilder('user')
       .where('user.id = :userId', { userId })
       .select([
@@ -64,8 +64,47 @@ export class UserRepository {
         'user.lastActive',
         'user.createdAt',
         'user.bio',
-      ])
-      .getRawOne();
+      ]);
+
+    if (currentUserId) {
+      qb.addSelect(
+        'CASE ' +
+          '  WHEN EXISTS (' +
+          '    SELECT 1 FROM friend_requests fr ' +
+          "    WHERE fr.status = 'accepted' " +
+          '    AND ((fr.from_user_id = :currentUserId AND fr.to_user_id = :userId) ' +
+          '    OR (fr.from_user_id = :userId AND fr.to_user_id = :currentUserId))' +
+          "  ) THEN 'friends' " +
+          '  WHEN EXISTS (' +
+          '    SELECT 1 FROM friend_requests fr ' +
+          "    WHERE fr.status = 'pending' " +
+          '    AND fr.from_user_id = :currentUserId AND fr.to_user_id = :userId' +
+          "  ) THEN 'sent' " +
+          '  WHEN EXISTS (' +
+          '    SELECT 1 FROM friend_requests fr ' +
+          "    WHERE fr.status = 'pending' " +
+          '    AND fr.from_user_id = :userId AND fr.to_user_id = :currentUserId' +
+          "  ) THEN 'received' " +
+          '  WHEN EXISTS (' +
+          '    SELECT 1 FROM friend_requests fr ' +
+          "    WHERE fr.status = 'rejected' " +
+          '    AND ((fr.from_user_id = :currentUserId AND fr.to_user_id = :userId) ' +
+          '    OR (fr.from_user_id = :userId AND fr.to_user_id = :currentUserId))' +
+          "  ) THEN 'rejected' " +
+          "  ELSE 'none' END",
+        'friendRequestStatus',
+      ).addSelect(
+        '(SELECT fr.id FROM friend_requests fr ' +
+          " WHERE fr.status = 'pending' " +
+          ' AND ((fr.from_user_id = :currentUserId AND fr.to_user_id = :userId) ' +
+          ' OR (fr.from_user_id = :userId AND fr.to_user_id = :currentUserId)) ' +
+          ' LIMIT 1)',
+        'friendRequestId',
+      );
+      qb.setParameter('currentUserId', currentUserId);
+    }
+
+    return qb.getRawOne();
   }
 
   async searchByUsername(
