@@ -46,10 +46,6 @@ export class UserRepository {
     });
   }
 
-  async updateBio(userId: string, bio: string): Promise<void> {
-    await this.repo.update(userId, { bio });
-  }
-
   async getPublicProfile(userId: string, currentUserId?: string): Promise<any> {
     const qb = this.repo
       .createQueryBuilder('user')

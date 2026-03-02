@@ -52,18 +52,16 @@ export const register = async (req: Request, res: Response) => {
 
     const token = generateToken({ userId: user.id, email: user.email });
 
-    return res.status(201).json({
+    return res.json({
       success: true,
       data: {
-        user: {
         id: user.id,
         username: user.username,
         email: user.email,
         displayName: user.displayName,
         avatarUrl: user.avatarUrl,
       },
-        token,
-      },
+      token,
     });
   } catch (err: any) {
     console.error('[REGISTER ERROR]', err);
@@ -82,7 +80,7 @@ export const login = async (req: Request, res: Response) => {
     if (errors.length > 0) {
       return res.status(400).json({
         success: false,
-        errors: errors.map(e => e.constraints),
+        errors: errors.map((e) => e.constraints),
       });
     }
 
@@ -94,7 +92,10 @@ export const login = async (req: Request, res: Response) => {
       });
     }
 
-    const isPasswordValid = await comparePassword(dto.password, user.passwordHash);
+    const isPasswordValid = await comparePassword(
+      dto.password,
+      user.passwordHash,
+    );
     if (!isPasswordValid) {
       return res.status(401).json({
         success: false,
@@ -126,7 +127,10 @@ export const login = async (req: Request, res: Response) => {
   }
 };
 
-export const getCurrentUser = async (req: AuthenticatedRequest, res: Response) => {
+export const getCurrentUser = async (
+  req: AuthenticatedRequest,
+  res: Response,
+) => {
   try {
     const userId = req.user!.userId;
 
