@@ -46,6 +46,16 @@ export class UserRepository {
     });
   }
 
+  async addPhoto(userId: string, photoUrl: string): Promise<void> {
+    await this.repo
+      .createQueryBuilder()
+      .update(User)
+      .set({ photos: () => 'array_append(photos, :photoUrl)' })
+      .where('id = :userId', { userId })
+      .setParameter('photoUrl', photoUrl)
+      .execute();
+  }
+
   async getPublicProfile(userId: string, currentUserId?: string): Promise<any> {
     const qb = this.repo
       .createQueryBuilder('user')
@@ -60,6 +70,7 @@ export class UserRepository {
         'user.lastActive',
         'user.createdAt',
         'user.bio',
+        'user.photos'
       ]);
 
     if (currentUserId) {

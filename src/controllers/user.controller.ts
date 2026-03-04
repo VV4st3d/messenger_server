@@ -6,6 +6,28 @@ import path from 'path';
 import fs from 'fs/promises';
 import { v4 as uuid } from 'uuid';
 import multer from 'multer';
+import { log } from 'console';
+
+const photoStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const dir = path.join(__dirname, '../../uploads/photos');
+    fs.mkdir(dir, { recursive: true }).then(() => cb(null, dir));
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    cb(null, `${uuid()}${ext}`);
+  },
+});
+
+const uploadPhotoMulter = multer({
+  storage: photoStorage,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    if (allowed.includes(file.mimetype)) cb(null, true);
+    else cb(new Error('Только изображения'));
+  },
+});
 
 export const checkEmail = async (req: Request, res: Response) => {
   try {
@@ -196,6 +218,7 @@ export const getUserProfile = async (
         lastActive: profile.user_lastActive,
         createdAt: profile.user_createdAt,
         bio: profile.user_bio || null,
+        photos: profile.user_photos,
         friendRequestStatus: profile.friendRequestStatus || 'none',
         friendRequestId: profile.friendRequestId || null,
         isOwnProfile: id === currentUserId,
@@ -206,3 +229,34 @@ export const getUserProfile = async (
     return res.status(500).json({ success: false, message: 'Ошибка сервера' });
   }
 };
+
+export const uploadProfilePhoto = [
+  uploadPhotoMulter.single('photo'),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const userId = req.user!.userId;
+      const file = req.file;
+
+      if (!file) {
+        return res
+          .status(400)
+          .json({ success: false, message: 'Фото не загружено' });
+      }
+
+      const photoUrl = `/uploads/photos/${file.filename}`;
+
+      await userRepository.addPhoto(userId, photoUrl);
+
+      return res.json({
+        success: true,
+        data: { photoUrl },
+      });
+    } catch (err) {
+      if (req.file) await fs.unlink(req.file.path).catch(() => {});
+      console.error('Ошибка загрузки фото:', err);
+      return res
+        .status(500)
+        .json({ success: false, message: 'Ошибка сервера' });
+    }
+  },
+];

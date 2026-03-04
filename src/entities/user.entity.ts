@@ -49,6 +49,10 @@ export class User {
 
   @ManyToMany(() => Chat, (chat) => chat.participants)
   chats!: Chat[];
+
   @Column({ type: 'text', nullable: true })
   bio?: string;
+
+  @Column('text', { array: true, default: () => '{}' })
+  photos: string[] = [];
 }
