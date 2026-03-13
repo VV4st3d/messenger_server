@@ -40,7 +40,7 @@ export const sendMessage = async (req: AuthenticatedRequest, res: Response) => {
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, 'uploads/temp/'); 
+    cb(null, 'uploads/temp/');
   },
   filename: (req, file, cb) => {
     const ext = path.extname(file.originalname);
@@ -56,9 +56,10 @@ const upload = multer({
       'image/jpeg',
       'image/png',
       'video/mp4',
-      'audio/mpeg',
       'application/pdf',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     ];
+
     if (allowed.includes(file.mimetype)) cb(null, true);
     else cb(new Error('Недопустимый тип файла'));
   },

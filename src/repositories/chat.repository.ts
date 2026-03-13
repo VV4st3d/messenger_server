@@ -27,6 +27,7 @@ export class ChatRepository {
         user1: user1Id,
         user2: user2Id,
       })
+      .leftJoinAndSelect('chat.participants', 'participants')
       .getOne();
 
     if (!chat) {
@@ -38,6 +39,37 @@ export class ChatRepository {
     }
 
     return chat;
+  }
+
+  async createGroupChat(
+    creatorId: string,
+    name: string,
+    participantIds: string[],
+  ): Promise<Chat> {
+    const chat = this.repo.create({
+      type: 'group',
+      name: name.trim(),
+      creator_id: creatorId, 
+    });
+
+    const savedChat = await this.repo.save(chat);
+
+    const values = participantIds.map((userId) => ({
+      chat_id: savedChat.id,
+      user_id: userId,
+    }));
+
+    await AppDataSource.createQueryBuilder()
+      .insert()
+      .into('chat_participants')
+      .values(values)
+      .execute();
+
+    return this.repo
+      .createQueryBuilder('chat')
+      .leftJoinAndSelect('chat.participants', 'participants')
+      .where('chat.id = :id', { id: savedChat.id })
+      .getOneOrFail();
   }
 
   async getUserChats(userId: string): Promise<Chat[]> {
